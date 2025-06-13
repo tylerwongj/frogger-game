@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frogger Game</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            font-family: Arial, sans-serif;
+            color: white;
+            overflow: hidden;
+        }
+        
+        .game-container {
+            text-align: center;
+            max-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        h1 {
+            margin: 5px 0;
+            color: #4CAF50;
+            font-size: 20px;
+        }
+        
+        #gameBoard {
+            border: 3px solid #4CAF50;
+            background-color: #2d2d2d;
+            margin: 0 auto;
+        }
+        
+        .score {
+            font-size: 16px;
+            margin: 5px 0;
+            color: #4CAF50;
+        }
+        
+        .game-over {
+            color: #ff4444;
+            font-size: 32px;
+            margin: 20px 0;
+        }
+        
+        .level-complete {
+            color: #4CAF50;
+            font-size: 28px;
+            margin: 20px 0;
+        }
+        
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin: 3px;
+        }
+        
+        button:hover {
+            background-color: #45a049;
+        }
+        
+        .controls {
+            margin-top: 5px;
+            font-size: 10px;
+            color: #aaa;
+        }
+        
+        .lives {
+            font-size: 14px;
+            color: #ff4444;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>🐸 Frogger</h1>
+        <div class="score">Score: <span id="score">0</span> | Level: <span id="level">1</span></div>
+        <div class="lives">Lives: <span id="lives">3</span></div>
+        <canvas id="gameBoard" width="600" height="600"></canvas>
+        <div id="gameOver" class="game-over" style="display: none;">Game Over!</div>
+        <div id="levelComplete" class="level-complete" style="display: none;">Level Complete!</div>
+        <button id="startButton" onclick="startGame()">Start Game</button>
+        <button id="restartButton" onclick="restartGame()" style="display: none;">Restart</button>
+        <button id="nextLevelButton" onclick="nextLevel()" style="display: none;">Next Level</button>
+        <div class="controls">
+            Use arrow keys or WASD to move the frog<br>
+            Avoid cars and reach the top safely!
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameBoard');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const livesElement = document.getElementById('lives');
+        const gameOverElement = document.getElementById('gameOver');
+        const levelCompleteElement = document.getElementById('levelComplete');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const nextLevelButton = document.getElementById('nextLevelButton');
+
+        const gridSize = 50;
+        const rows = canvas.height / gridSize;
+        const cols = canvas.width / gridSize;
+
+        let frog = { x: 5, y: 11 };
+        let cars = [];
+        let score = 0;
+        let level = 1;
+        let lives = 3;
+        let gameRunning = false;
+        let levelCompleted = false;
+
+        function initializeCars() {
+            cars = [];
+            
+            // Row 1 - cars moving right
+            cars.push({ x: 0, y: 9, direction: 1, speed: 1 + level * 0.2, color: '#ff4444' });
+            cars.push({ x: 4, y: 9, direction: 1, speed: 1 + level * 0.2, color: '#ff4444' });
+            cars.push({ x: 8, y: 9, direction: 1, speed: 1 + level * 0.2, color: '#ff4444' });
+            
+            // Row 2 - cars moving left
+            cars.push({ x: 11, y: 8, direction: -1, speed: 1.5 + level * 0.2, color: '#44ff44' });
+            cars.push({ x: 7, y: 8, direction: -1, speed: 1.5 + level * 0.2, color: '#44ff44' });
+            cars.push({ x: 3, y: 8, direction: -1, speed: 1.5 + level * 0.2, color: '#44ff44' });
+            
+            // Row 3 - cars moving right
+            cars.push({ x: 0, y: 7, direction: 1, speed: 2 + level * 0.2, color: '#4444ff' });
+            cars.push({ x: 6, y: 7, direction: 1, speed: 2 + level * 0.2, color: '#4444ff' });
+            
+            // Row 4 - cars moving left
+            cars.push({ x: 11, y: 6, direction: -1, speed: 1.8 + level * 0.2, color: '#ffff44' });
+            cars.push({ x: 5, y: 6, direction: -1, speed: 1.8 + level * 0.2, color: '#ffff44' });
+            cars.push({ x: 9, y: 6, direction: -1, speed: 1.8 + level * 0.2, color: '#ffff44' });
+            
+            // Row 5 - cars moving right
+            cars.push({ x: 0, y: 5, direction: 1, speed: 2.5 + level * 0.2, color: '#ff44ff' });
+            cars.push({ x: 7, y: 5, direction: 1, speed: 2.5 + level * 0.2, color: '#ff44ff' });
+        }
+
+        function drawGame() {
+            clearCanvas();
+            drawRoad();
+            drawSafeZones();
+            drawFrog();
+            drawCars();
+            updateDisplay();
+            
+            if (gameRunning && !levelCompleted) {
+                moveCars();
+                checkCollisions();
+                checkWin();
+                setTimeout(drawGame, 50);
+            }
+        }
+
+        function clearCanvas() {
+            ctx.fillStyle = '#2d2d2d';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawRoad() {
+            // Road lanes
+            ctx.fillStyle = '#333';
+            for (let y = 5; y <= 9; y++) {
+                ctx.fillRect(0, y * gridSize, canvas.width, gridSize);
+            }
+            
+            // Lane dividers
+            ctx.fillStyle = '#ffff00';
+            for (let y = 5; y <= 8; y++) {
+                for (let x = 0; x < cols; x += 2) {
+                    ctx.fillRect(x * gridSize + gridSize/2 - 2, (y + 0.5) * gridSize - 1, gridSize - 10, 2);
+                }
+            }
+        }
+
+        function drawSafeZones() {
+            // Start zone (bottom)
+            ctx.fillStyle = '#2d5d2d';
+            ctx.fillRect(0, 10 * gridSize, canvas.width, 2 * gridSize);
+            
+            // Safe zone (middle)
+            ctx.fillStyle = '#2d5d2d';
+            ctx.fillRect(0, 4 * gridSize, canvas.width, gridSize);
+            
+            // Goal zone (top)
+            ctx.fillStyle = '#2d5d2d';
+            ctx.fillRect(0, 0, canvas.width, 4 * gridSize);
+            
+            // Goal line
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(0, 0, canvas.width, 5);
+            
+            ctx.fillStyle = '#4CAF50';
+            ctx.font = '16px Arial';
+            ctx.fillText('GOAL', canvas.width/2 - 20, 25);
+        }
+
+        function drawFrog() {
+            ctx.fillStyle = '#4CAF50';
+            const x = frog.x * gridSize + 5;
+            const y = frog.y * gridSize + 5;
+            
+            // Frog body
+            ctx.fillRect(x + 10, y + 10, gridSize - 30, gridSize - 30);
+            
+            // Frog eyes
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(x + 15, y + 12, 8, 8);
+            ctx.fillRect(x + 27, y + 12, 8, 8);
+            
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(x + 17, y + 14, 4, 4);
+            ctx.fillRect(x + 29, y + 14, 4, 4);
+        }
+
+        function drawCars() {
+            cars.forEach(car => {
+                ctx.fillStyle = car.color;
+                const x = car.x * gridSize;
+                const y = car.y * gridSize + 10;
+                ctx.fillRect(x, y, gridSize - 5, gridSize - 20);
+                
+                // Car windows
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(x + 5, y + 5, gridSize - 15, gridSize - 30);
+            });
+        }
+
+        function moveCars() {
+            cars.forEach(car => {
+                car.x += car.direction * car.speed * 0.02;
+                
+                if (car.direction === 1 && car.x > cols) {
+                    car.x = -1;
+                } else if (car.direction === -1 && car.x < -1) {
+                    car.x = cols;
+                }
+            });
+        }
+
+        function checkCollisions() {
+            cars.forEach(car => {
+                const carLeft = car.x;
+                const carRight = car.x + 1;
+                const carTop = car.y;
+                const carBottom = car.y + 1;
+                
+                const frogLeft = frog.x;
+                const frogRight = frog.x + 1;
+                const frogTop = frog.y;
+                const frogBottom = frog.y + 1;
+                
+                if (frogLeft < carRight && frogRight > carLeft &&
+                    frogTop < carBottom && frogBottom > carTop) {
+                    loseLife();
+                }
+            });
+        }
+
+        function checkWin() {
+            if (frog.y <= 3) {
+                levelCompleted = true;
+                score += 100 * level;
+                levelCompleteElement.style.display = 'block';
+                nextLevelButton.style.display = 'inline-block';
+            }
+        }
+
+        function loseLife() {
+            lives--;
+            frog.x = 5;
+            frog.y = 11;
+            
+            if (lives <= 0) {
+                gameOver();
+            }
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            gameOverElement.style.display = 'block';
+            startButton.style.display = 'none';
+            restartButton.style.display = 'inline-block';
+        }
+
+        function updateDisplay() {
+            scoreElement.textContent = score;
+            levelElement.textContent = level;
+            livesElement.textContent = lives;
+        }
+
+        function startGame() {
+            frog = { x: 5, y: 11 };
+            score = 0;
+            level = 1;
+            lives = 3;
+            gameRunning = true;
+            levelCompleted = false;
+            gameOverElement.style.display = 'none';
+            levelCompleteElement.style.display = 'none';
+            startButton.style.display = 'none';
+            restartButton.style.display = 'none';
+            nextLevelButton.style.display = 'none';
+            initializeCars();
+            drawGame();
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function nextLevel() {
+            level++;
+            frog.x = 5;
+            frog.y = 11;
+            levelCompleted = false;
+            gameRunning = true;
+            levelCompleteElement.style.display = 'none';
+            nextLevelButton.style.display = 'none';
+            initializeCars();
+            drawGame();
+        }
+
+        document.addEventListener('keydown', moveFrog);
+
+        function moveFrog(event) {
+            if (!gameRunning || levelCompleted) return;
+            
+            const LEFT_KEY = 37;
+            const RIGHT_KEY = 39;
+            const UP_KEY = 38;
+            const DOWN_KEY = 40;
+            
+            const A_KEY = 65;
+            const D_KEY = 68;
+            const W_KEY = 87;
+            const S_KEY = 83;
+
+            const keyPressed = event.keyCode;
+
+            if ((keyPressed === LEFT_KEY || keyPressed === A_KEY) && frog.x > 0) {
+                frog.x--;
+            }
+            if ((keyPressed === UP_KEY || keyPressed === W_KEY) && frog.y > 0) {
+                frog.y--;
+                score += 10;
+            }
+            if ((keyPressed === RIGHT_KEY || keyPressed === D_KEY) && frog.x < cols - 1) {
+                frog.x++;
+            }
+            if ((keyPressed === DOWN_KEY || keyPressed === S_KEY) && frog.y < rows - 1) {
+                frog.y++;
+            }
+        }
+
+        function drawInitialGame() {
+            clearCanvas();
+            drawRoad();
+            drawSafeZones();
+            drawFrog();
+            drawCars();
+            updateDisplay();
+        }
+
+        initializeCars();
+        drawInitialGame();
+    </script>
+</body>
+</html>
